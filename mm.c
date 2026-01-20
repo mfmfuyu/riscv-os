@@ -11,7 +11,7 @@ paddr_t alloc_pages(uint32_t n) {
 	next_paddr += n * PAGE_SIZE;
 
 	if (next_paddr > (paddr_t) __free_ram_end)
-			panic("out of memory");
+			panic("mm: out of memory");
 
 	memset((void *) paddr, 0, n * PAGE_SIZE);
 	return paddr;
