@@ -1,9 +1,17 @@
-#include "string.h"
+#include "common.h"
+#include "stdio.h"
 
-void panic(char *s)
+void panic(const char *fmt, ...)
 {
+    va_list vargs;
+    va_start(vargs, fmt);
+
     do {
-        printf("Kernel panic: %s\n", s);
+        char buf[256];
+        vsprintf(buf, fmt, vargs);
+        va_end(vargs);
+
+        printf("Kernel panic: %s\n", buf);
         while (1);
     } while (0);
 }

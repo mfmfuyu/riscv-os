@@ -1,1 +1,1 @@
-void panic(char *s);
+void panic(const char *fmt, ...);
