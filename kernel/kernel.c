@@ -3,6 +3,8 @@
 #include "panic.h"
 #include "kernel.h"
 #include "sched.h"
+#include "virtio.h"
+#include "stdio.h"
 
 extern char __bss[], __bss_end[], __stack_top[];
 
@@ -98,6 +100,15 @@ void kernel_main(void) {
 
     WRITE_CSR(stvec, (uint32_t) kernel_entry);
 
+	virtio_blk_init();
+
+	char buf[SECTOR_SIZE];
+	read_write_disk(buf, 0, false);
+	printf("first sector: %s\n", buf);
+
+	strcpy(buf, "hello from kernel!!!\n");
+	read_write_disk(buf, 0, true);
+	
     create_idle_process();
     yield();
     panic("switched to idle process");
