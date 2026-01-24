@@ -1,3 +1,5 @@
+#include "kernel.h"
+
 #define SATP_SV32 (1u << 31)
 
 #define PAGE_V	(1 << 0)
@@ -9,3 +11,4 @@
 paddr_t alloc_pages(uint32_t n);
 void map_page(uint32_t *table1, uint32_t vaddr, paddr_t paddr, uint32_t flags);
 void map_kernel_pages(uint32_t *page_table);
+void map_user_pages(uint32_t *page_table, const void *image, size_t image_size);

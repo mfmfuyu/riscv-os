@@ -1,5 +1,6 @@
 #pragma once
 
+#include "types.h"
 #include "common.h"
 
 #define USER_BASE 0x1000000

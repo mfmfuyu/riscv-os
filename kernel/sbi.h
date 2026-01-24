@@ -1,5 +1,7 @@
 #pragma once
 
+#include "kernel.h"
+
 #define SBI_CONSOLE_PUT_CHAR 0x01
 #define SBI_SET_TIMER 0x54494D45
 

@@ -38,9 +38,28 @@ void map_page(uint32_t *table1, uint32_t vaddr, paddr_t paddr, uint32_t flags)
 	table0[vpn0] = ((paddr / PAGE_SIZE) << 10) | flags | PAGE_V;
 }
 
+// Map kernel pages.
 void map_kernel_pages(uint32_t *page_table)
 {
 	for (paddr_t paddr = (paddr_t) __kernel_base;
 					paddr < (paddr_t) __free_ram_end; paddr += PAGE_SIZE)
 			map_page(page_table, paddr, paddr, PAGE_R | PAGE_W | PAGE_X);
+}
+
+// Map user pages.
+void map_user_pages(uint32_t *page_table, const void *image, size_t image_size)
+{
+	for (uint32_t off = 0; off < image_size; off += PAGE_SIZE) {
+		paddr_t page = alloc_pages(1);
+
+		// Handle the case where the data to be copied is smaller than the
+		// page size.
+		size_t remaining = image_size - off;
+		size_t copy_size = PAGE_SIZE <= remaining ? PAGE_SIZE : remaining;
+
+		// Fill and map the page.
+		memcpy((void *) page, image + off, copy_size);
+		map_page(page_table, USER_BASE + off, page,
+						PAGE_U | PAGE_R | PAGE_W | PAGE_X);
+	}
 }

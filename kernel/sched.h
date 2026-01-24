@@ -14,9 +14,9 @@ struct process {
 	uint32_t sepc;
 };
 
+void sched_init(void);
 void switch_context(uint32_t *prev_sp, uint32_t *next_sp);
 struct process *create_process(const void *image, size_t image_size);
-void create_idle_process(void);
 void yield(void);
 struct process *current(void);
 void sched(void);

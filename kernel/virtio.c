@@ -32,17 +32,22 @@ void virtio_reg_fetch_and_or32(unsigned offset, uint32_t value)
 
 struct virtio_virtq *virtq_init(unsigned index)
 {
+	// Allocate a region for the virtqueue.
 	paddr_t virtq_paddr = alloc_pages(align_up(sizeof(struct virtio_virtq), PAGE_SIZE) / PAGE_SIZE);
 	struct virtio_virtq *vq = (struct virtio_virtq *) virtq_paddr;
 	vq->queue_index = index;
 	vq->used_index = (volatile uint16_t *) &vq->used.index;
-
+	// Select the queue: Write the virtqueue index (first queue is 0).
 	virtio_reg_write32(VIRTIO_REG_QUEUE_SEL, index);
+	// Specify the queue size: Write the # of descriptors we'll use.
 	virtio_reg_write32(VIRTIO_REG_QUEUE_NUM, VIRTQ_ENTRY_NUM);
+	// Write the physical page frame number (not physical address!) of the queue.
 	virtio_reg_write32(VIRTIO_REG_QUEUE_PFN, virtq_paddr / PAGE_SIZE);
 	return vq;
 }
 
+// Notifies the device that there is a new request. `desc_index` is the index
+// of the head descriptor of the new request.
 void virtq_kick(struct virtio_virtq *vq, int desc_index)
 {
 	vq->avail.ring[vq->avail.index % VIRTQ_ENTRY_NUM] = desc_index;
@@ -52,11 +57,13 @@ void virtq_kick(struct virtio_virtq *vq, int desc_index)
 	vq->last_used_index++;
 }
 
+// Returns whether there are requests being processed by the device.
 bool virtq_is_busy(struct virtio_virtq *vq)
 {
 	return vq->last_used_index != *vq->used_index;
 }
 
+// Reads/writes from/to virtio-blk device.
 void read_write_disk(void *buf, unsigned sector, int is_write)
 {
 	if (sector >= blk_capacity / SECTOR_SIZE)
@@ -65,11 +72,13 @@ void read_write_disk(void *buf, unsigned sector, int is_write)
 			return;
 	}
 
+	// Construct the request according to the virtio-blk specification.
 	blk_req->sector = sector;
 	blk_req->type = is_write ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN;
 	if (is_write)
 			memcpy(blk_req->data, buf, SECTOR_SIZE);
 
+	// Construct the virtqueue descriptors (using 3 descriptors).
 	struct virtio_virtq *vq = blk_request_vq;
 	vq->descs[0].addr = blk_req_paddr;
 	vq->descs[0].len = sizeof(uint32_t) * 2 + sizeof(uint64_t);
@@ -85,17 +94,21 @@ void read_write_disk(void *buf, unsigned sector, int is_write)
 	vq->descs[2].len = sizeof(uint8_t);
 	vq->descs[2].flags = VIRTQ_DESC_F_WRITE;
 
+	// Notify the device that there is a new request.
 	virtq_kick(vq, 0);
 
+	// Wait until the device finishes processing.
 	while (virtq_is_busy(vq))
 					;
 
+	// virtio-blk If a non-zero value is returned, it's an error.
 	if (blk_req->status != 0)
 	{
 			printf("virtio: warn: failed to read/write sector=%d status=%d\n", sector, blk_req->status);
 			return;
 	}
 
+	// For read operations, copy the data into the buffer.
 	if (!is_write)
 			memcpy(buf, blk_req->data, SECTOR_SIZE);
 
@@ -112,17 +125,24 @@ void virtio_blk_init(void)
 	if (virtio_reg_read32(VIRTIO_REG_DEVICE_ID) != VIRTIO_DEVICE_BLK)
 			panic("virtio: invalid device id");
 
+	// 1. Reset the device.
 	virtio_reg_write32(VIRTIO_REG_DEVICE_STATUS, 0);
+	// 2. Set the ACKNOWLEDGE status bit: We found device.
 	virtio_reg_fetch_and_or32(VIRTIO_REG_DEVICE_STATUS, VIRTIO_STATUS_ACK);
+	// 3. Set the DRIVER status bit: We know how to use the device.
 	virtio_reg_fetch_and_or32(VIRTIO_REG_DEVICE_STATUS, VIRTIO_STATUS_DRIVER);
+	// Set our page size: We use 4KB pages. This defines PFN (page fframe number) calculation.
 	virtio_reg_write32(VIRTIO_REG_PAGE_SIZE, PAGE_SIZE);
-
+	// Initialize a queue for disk read/write requests.
 	blk_request_vq = virtq_init(0);
+	// 6. Set the DRIVER_OK status bit: We can now use the device!
 	virtio_reg_write32(VIRTIO_REG_DEVICE_STATUS, VIRTIO_STATUS_DRIVER_OK);
 
+	// Get the disk capacity.
 	blk_capacity = virtio_reg_read64(VIRTIO_REG_DEVICE_CONFIG + 0) * SECTOR_SIZE;
 	printf("virtio-blk: capacity is %d bytes\n", (int) blk_capacity);
 
+	// Allocate a region to store requests to the device.
 	blk_req_paddr = alloc_pages(align_up(sizeof(*blk_req), PAGE_SIZE) / PAGE_SIZE);
 	blk_req = (struct virtio_blk_req *) blk_req_paddr;
 }
