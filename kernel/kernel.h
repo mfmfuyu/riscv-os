@@ -1,4 +1,8 @@
+#pragma once
+
 #include "common.h"
+
+#define USER_BASE 0x1000000
 
 struct trap_frame {
     uint32_t ra;

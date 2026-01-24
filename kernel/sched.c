@@ -1,7 +1,11 @@
 #include "common.h"
 #include "sched.h"
+#include "kernel.h"
 #include "mm.h"
 #include "panic.h"
+#include "stdio.h"
+#include "riscv.h"
+#include "string.h"
 
 struct process procs[PROCS_MAX];
 
@@ -48,7 +52,25 @@ void switch_context(uint32_t *prev_sp, uint32_t *next_sp)
     );
 }
 
-struct process *create_process(uint32_t pc)
+__attribute__((naked))
+void user_entry(void)
+{
+		__asm__ __volatile__(
+		                "csrw sepc, %[sepc]\n"
+
+						"li   t0, 0\n"
+						"ori  t0, t0, %[spie]\n"
+						"csrw sstatus, t0\n"
+
+						"csrw sie, %[sie]\n"
+						"sret\n"
+						:
+						: [sepc] "r" (USER_BASE),
+						  [spie] "i" (SSTATUS_SPIE),
+		                  [sie] "r" (SIE_STIE));
+}
+
+struct process *create_process(const void *image, size_t image_size)
 {
 		struct process *proc = NULL;
 		int i;
@@ -75,21 +97,34 @@ struct process *create_process(uint32_t pc)
         *--sp = 0;              // s2
         *--sp = 0;              // s1
         *--sp = 0;              // s0
-        *--sp = (uint32_t) pc;  // ra
+        *--sp = (uint32_t) user_entry;  // ra
 
 		uint32_t *page_table = (uint32_t *) alloc_pages(1);
 		map_kernel_pages(page_table);
+
+		for (uint32_t off = 0; off < image_size; off += PAGE_SIZE) {
+				paddr_t page = alloc_pages(1);
+
+				size_t remaining = image_size - off;
+				size_t copy_size = PAGE_SIZE <= remaining ? PAGE_SIZE : remaining;
+
+				memcpy((void *) page, image + off, copy_size);
+
+				map_page(page_table, USER_BASE + off, page,
+								PAGE_U | PAGE_R | PAGE_W | PAGE_X);
+		}
 
 		proc->pid = i + 1;
 		proc->state = PROC_RUNNABLE;
 		proc->sp = (uint32_t) sp;
 		proc->page_table = page_table;
+		proc->sepc = USER_BASE;
 		return proc;
 }
 
 void create_idle_process(void)
 {
-    idle_proc = create_process((uint32_t) NULL);
+    idle_proc = create_process(NULL, 0);
     idle_proc->pid = 0; // idle
     current_proc = idle_proc;
 }
@@ -121,4 +156,33 @@ void yield(void)
 						[sscratch] "r" ((uint32_t) &next->stack[sizeof(next->stack)]));
 
 	switch_context(&prev->sp, &next->sp);
+}
+
+struct process *current(void)
+{
+    return current_proc;
+}
+
+void sched(void)
+{
+	struct process *next = idle_proc;
+	for (int i = 0; i < PROCS_MAX; i++) {
+		struct process *proc = &procs[(current_proc->pid + i) % PROCS_MAX];
+		if (proc->state == PROC_RUNNABLE && proc->pid > 0) {
+			next = proc;
+			break;
+		}
+	}
+
+	struct process *prev = current_proc;
+	current_proc = next;
+
+	__asm__ __volatile__(
+					"sfence.vma\n"
+					"csrw satp, %[satp]\n"
+					"sfence.vma\n"
+					"csrw sscratch, %[sscratch]\n"
+					:
+					: 	[satp] "r" (SATP_SV32 | ((uint32_t) next->page_table / PAGE_SIZE)),
+						[sscratch] "r" ((uint32_t) &next->stack[sizeof(next->stack)]));
 }

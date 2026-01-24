@@ -5,6 +5,8 @@
 #include "sched.h"
 #include "virtio.h"
 #include "stdio.h"
+#include "timer.h"
+#include "sbi.h"
 
 extern char __bss[], __bss_end[], __stack_top[];
 
@@ -13,8 +15,8 @@ __attribute__((aligned(4)))
 void kernel_entry(void)
 {
 	__asm__ __volatile__(
-		"csrw sscratch, sp\n"
-        "addi sp, sp, -4 * 31\n"
+	    "csrrw sp, sscratch, sp\n"
+		"addi sp, sp, -4 * 31\n"
         "sw ra,  4 * 0(sp)\n"
         "sw gp,  4 * 1(sp)\n"
         "sw tp,  4 * 2(sp)\n"
@@ -47,7 +49,10 @@ void kernel_entry(void)
         "sw s11, 4 * 29(sp)\n"
 
         "csrr a0, sscratch\n"
-        "sw a0, 4 * 30(sp)\n"
+        "sw a0,  4 * 30(sp)\n"
+
+        "addi a0, sp, 4 * 31\n"
+        "csrw sscratch, a0\n"
 
         "mv a0, sp\n"
         "call handle_trap\n"
@@ -82,35 +87,61 @@ void kernel_entry(void)
         "lw s9,  4 * 27(sp)\n"
         "lw s10, 4 * 28(sp)\n"
         "lw s11, 4 * 29(sp)\n"
-        "lw sp,  4 * 30(sp)\n"
         "sret\n"
 	);
 }
 
-void handle_trap(struct trap_frame *f) {
+void handle_syscall(struct trap_frame *tf)
+{
+	switch (tf->a3) {
+		case 1:
+			sbi_putchar(tf->a0);
+			break;
+		default:
+			panic("unexpected syscall a3=%x\n", tf->a3);
+	}
+}
+
+void handle_trap(struct trap_frame *tf)
+{
     uint32_t scause = READ_CSR(scause);
     uint32_t stval = READ_CSR(stval);
     uint32_t user_pc = READ_CSR(sepc);
 
-    panic("unexpected trap scause=%x, stval=%x, sepc=%x\n", scause, stval, user_pc);
+    current()->sepc = user_pc;
+
+	if (scause == 0x80000005) {
+		sched();
+		timer_next();
+		user_pc = current()->sepc;
+	} else if (scause == 8) {
+		handle_syscall(tf);
+		user_pc += 4;
+	}else {
+		panic("unexpected trap scause=%x, stval=%x, sepc=%x\n", scause, stval, user_pc);
+	}
+
+	WRITE_CSR(sepc, user_pc);
 }
 
-void kernel_main(void) {
+extern char _binary_shell_bin_start[], _binary_shell_bin_size[];
+extern char _binary_shell2_bin_start[], _binary_shell2_bin_size[];
+
+void kernel_main(void)
+{
     memset(__bss, 0, (size_t) __bss_end - (size_t) __bss);
 
     WRITE_CSR(stvec, (uint32_t) kernel_entry);
 
 	virtio_blk_init();
 
-	char buf[SECTOR_SIZE];
-	read_write_disk(buf, 0, false);
-	printf("first sector: %s\n", buf);
+	create_idle_process();
+	create_process(_binary_shell_bin_start, (size_t) _binary_shell_bin_size);
+	create_process(_binary_shell2_bin_start, (size_t) _binary_shell2_bin_size);
 
-	strcpy(buf, "hello from kernel!!!\n");
-	read_write_disk(buf, 0, true);
-	
-    create_idle_process();
-    yield();
+	yield();
+	timer_init();
+
     panic("switched to idle process");
 }
 
