@@ -10,8 +10,8 @@ LIB_SOURCES=$(wildcard lib/*.c)
 all: build
 
 build:
-	$(CC) $(CFLAGS) -Wl,-Tuser/user.ld -Wl,-Map=user/shell.map -o shell.elf user/sh.c user/user.c
-	$(CC) $(CFLAGS) -Wl,-Tuser/user.ld -Wl,-Map=user/shell2.map -o shell2.elf user/sh2.c user/user.c
+	$(CC) $(CFLAGS) -Wl,-Tuser/user.ld -Wl,-Map=user/shell.map -o shell.elf user/sh.c user/user.c $(LIB_SOURCES)
+	$(CC) $(CFLAGS) -Wl,-Tuser/user.ld -Wl,-Map=user/shell2.map -o shell2.elf user/sh2.c user/user.c $(LIB_SOURCES)
 	$(OBJCOPY) --set-section-flags .bss=alloc,contents -O binary shell.elf shell.bin
 	$(OBJCOPY) --set-section-flags .bss=alloc,contents -O binary shell2.elf shell2.bin
 	$(OBJCOPY) -Ibinary -Oelf32-littleriscv shell.bin shell.bin.o

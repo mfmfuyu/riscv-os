@@ -53,19 +53,16 @@ void switch_context(uint32_t *prev_sp, uint32_t *next_sp)
 __attribute__((naked))
 void user_entry(void)
 {
-		__asm__ __volatile__(
-						"csrw sepc, %[sepc]\n"
-
-						"li   t0, 0\n"
-						"ori  t0, t0, %[spie]\n"
-						"csrw sstatus, t0\n"
-
-						"csrw sie, %[sie]\n"
-						"sret\n"
-						:
-						: [sepc] "r" (USER_BASE),
-						  [spie] "i" (SSTATUS_SPIE),
-						  [sie] "r" (SIE_STIE));
+	__asm__ __volatile__(
+		"csrw sepc, %[sepc]\n"
+		"csrw sstatus, %[sstatus]\n"
+		"csrw sie, %[sie]\n"
+		"sret"
+		:
+		: [sepc] "r" (USER_BASE),
+		[sstatus] "r" (SSTATUS_SPIE | SSTATUS_SUM),
+		[sie] "r" (SIE_STIE)
+	);
 }
 
 struct process *create_process(const void *image, size_t image_size)

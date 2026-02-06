@@ -8,7 +8,7 @@ void delay(void) {
 void main(void)
 {
     while (1) {
-        putchar('A');
+        printf("A");
         delay();
     }
 	for(;;);

@@ -1,5 +1,6 @@
 #include "common.h"
 #include "stdio.h"
+#include "printk.h"
 
 void panic(const char *fmt, ...)
 {
@@ -10,6 +11,6 @@ void panic(const char *fmt, ...)
 	vsprintf(buf, fmt, vargs);
 	va_end(vargs);
 
-	printf("Kernel panic: %s\n", buf);
+	printk("Kernel panic: %s\n", buf);
 	for(;;);
 }

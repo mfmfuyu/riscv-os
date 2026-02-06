@@ -4,6 +4,7 @@
 #include "stdio.h"
 #include "mm.h"
 #include "string.h"
+#include "printk.h"
 
 struct virtio_virtq *blk_request_vq;
 struct virtio_blk_req *blk_req;
@@ -68,7 +69,7 @@ void read_write_disk(void *buf, unsigned sector, int is_write)
 {
 	if (sector >= blk_capacity / SECTOR_SIZE)
 	{
-			printf("virtio: tried to read/write sector=%d, but capacity is %d\n", sector, blk_capacity / SECTOR_SIZE);
+			printk("virtio: tried to read/write sector=%d, but capacity is %d\n", sector, blk_capacity / SECTOR_SIZE);
 			return;
 	}
 
@@ -104,7 +105,7 @@ void read_write_disk(void *buf, unsigned sector, int is_write)
 	// virtio-blk If a non-zero value is returned, it's an error.
 	if (blk_req->status != 0)
 	{
-			printf("virtio: warn: failed to read/write sector=%d status=%d\n", sector, blk_req->status);
+			printk("virtio: warn: failed to read/write sector=%d status=%d\n", sector, blk_req->status);
 			return;
 	}
 
@@ -140,7 +141,7 @@ void virtio_blk_init(void)
 
 	// Get the disk capacity.
 	blk_capacity = virtio_reg_read64(VIRTIO_REG_DEVICE_CONFIG + 0) * SECTOR_SIZE;
-	printf("virtio-blk: capacity is %d bytes\n", (int) blk_capacity);
+	printk("virtio-blk: capacity is %d bytes\n", (int) blk_capacity);
 
 	// Allocate a region to store requests to the device.
 	blk_req_paddr = alloc_pages(align_up(sizeof(*blk_req), PAGE_SIZE) / PAGE_SIZE);

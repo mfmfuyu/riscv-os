@@ -7,6 +7,7 @@
 #include "stdio.h"
 #include "timer.h"
 #include "sbi.h"
+#include "unistd.h"
 
 extern char __bss[], __bss_end[], __stack_top[];
 
@@ -87,6 +88,7 @@ void kernel_entry(void)
 		"lw s9,  4 * 27(sp)\n"
 		"lw s10, 4 * 28(sp)\n"
 		"lw s11, 4 * 29(sp)\n"
+		"lw sp, 4 * 30(sp)\n"
 		"sret\n"
 	);
 }
@@ -94,8 +96,12 @@ void kernel_entry(void)
 void handle_syscall(struct trap_frame *tf)
 {
 	switch (tf->a3) {
-		case 1:
-			sbi_putchar(tf->a0);
+		case SYS_write:
+			char *buf = (char *) tf->a1;
+			while (*buf) {
+				sbi_putchar(*buf);
+				buf++;
+			}
 			break;
 		default:
 			panic("unexpected syscall a3=%x\n", tf->a3);
@@ -139,8 +145,8 @@ void kernel_main(void)
 	create_process(_binary_shell_bin_start, (size_t) _binary_shell_bin_size);
 	create_process(_binary_shell2_bin_start, (size_t) _binary_shell2_bin_size);
 
-	// yield();
-	// timer_init();
+	yield();
+	timer_init();
 
 	panic("switched to idle process");
 }

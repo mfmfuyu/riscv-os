@@ -1,5 +1,5 @@
 #pragma once
 #include "../kernel/common.h"
 
-void putchar(char ch);
+void printf(const char *fmt, ...);
 __attribute__((noreturn)) void exit(void);
